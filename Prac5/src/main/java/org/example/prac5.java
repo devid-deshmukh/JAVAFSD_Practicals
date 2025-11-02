@@ -1,42 +1,106 @@
 package org.example;
 
+import java.io.BufferedReader;
+import java.io.FileReader;
 import java.sql.*;
+import java.util.Arrays;
+import java.util.Scanner;
 
 public class prac5 {
-    public static void main(String[] args) throws ClassNotFoundException, SQLException {
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
 
-        // Step 2: Create a connection
-        String url = "jdbc:mysql://localhost:3306/javafsd";
+        System.out.print("Enter CSV file path: ");
+        String filePath = sc.nextLine();
+
+        String url = "jdbc:mysql://localhost:3306/testdb";
         String username = "root";
-        String password = "pass123";  // change this
-        Connection connection = DriverManager.getConnection(url, username, password);
+        String password = "pass123"; // change to your MySQL password
 
-        // step 3: create statement object
-        Statement statement = connection.createStatement();
+        String tableName = "student_data";
 
-        // step 4: Execute query (READ)
-        String sql = "SELECT * FROM employee";
-        ResultSet resultSet = statement.executeQuery(sql);
-        while (resultSet.next()) {
-            System.out.println("Id: " + resultSet.getInt(1) + ", Name: " + resultSet.getString(2));
+        try {
+            Connection conn = DriverManager.getConnection(url, username, password);
+            Statement stmt = conn.createStatement();
+
+            BufferedReader br = new BufferedReader(new FileReader(filePath));
+
+            String headerLine = br.readLine();
+            String[] columns = headerLine.split(",", -1);
+
+            // ✅ Clean special characters in column names
+            for (int i = 0; i < columns.length; i++) {
+                columns[i] = columns[i].trim()
+                        .replace(" ", "_")
+                        .replace("/", "_")
+                        .replace("-", "_")
+                        .replace("\\", "_")
+                        .replace("(", "")
+                        .replace(")", "");
+            }
+
+            // ✅ Drop table if exists
+            stmt.executeUpdate("DROP TABLE IF EXISTS " + tableName);
+
+            // ✅ Create table dynamically
+            StringBuilder createQuery = new StringBuilder("CREATE TABLE " + tableName + " (");
+            for (int i = 0; i < columns.length; i++) {
+                createQuery.append("`").append(columns[i]).append("` VARCHAR(255)");
+                if (i < columns.length - 1) createQuery.append(", ");
+            }
+            createQuery.append(")");
+
+            stmt.executeUpdate(createQuery.toString());
+            System.out.println("✅ Table created successfully!");
+
+            String row;
+            int rowCount = 0;
+
+            // ✅ Insert CSV Rows
+            while ((row = br.readLine()) != null) {
+                String[] values = row.split(",", -1);
+
+                if (values.length < columns.length) {
+                    values = Arrays.copyOf(values, columns.length);
+                }
+                if (values.length > columns.length) {
+                    values = Arrays.copyOf(values, columns.length);
+                }
+
+                StringBuilder insertQuery = new StringBuilder("INSERT INTO " + tableName + " VALUES(");
+                for (int i = 0; i < values.length; i++) {
+                    String cleanedValue = values[i].trim().replace("'", "");
+                    insertQuery.append("'").append(cleanedValue).append("'");
+                    if (i < values.length - 1) insertQuery.append(", ");
+                }
+                insertQuery.append(")");
+
+                stmt.executeUpdate(insertQuery.toString());
+                rowCount++;
+            }
+
+            System.out.println("✅ " + rowCount + " rows inserted!");
+
+            // ✅ Show metadata
+            ResultSet rs = stmt.executeQuery("SELECT * FROM " + tableName);
+            ResultSetMetaData meta = rs.getMetaData();
+
+            int columnCount = meta.getColumnCount();
+            System.out.println("\n📌 Number of Columns: " + columnCount);
+            System.out.println("📌 Column Names:");
+            for (int i = 1; i <= columnCount; i++) {
+                System.out.println("- " + meta.getColumnName(i));
+            }
+
+            // ✅ Proper row count
+            ResultSet countRS = stmt.executeQuery("SELECT COUNT(*) FROM " + tableName);
+            if (countRS.next()) {
+                System.out.println("\n📌 Total Rows in DB: " + countRS.getInt(1));
+            }
+
+            conn.close();
+        } catch (Exception e) {
+            System.out.println("\n❌ Error: " + e.getMessage());
         }
-
-        // INSERT operation
-        String insertQuery = "INSERT INTO employee (id, name) VALUES (101, 'Ratan')";
-        int insertCount = statement.executeUpdate(insertQuery);
-        System.out.println("(" + insertCount + ") row inserted");
-
-        // UPDATE operation
-        String updateQuery = "UPDATE employee SET name='Sonoo' WHERE id=101";
-        int updateCount = statement.executeUpdate(updateQuery);
-        System.out.println("(" + updateCount + ") row updated");
-
-        // DELETE operation
-        String deleteQuery = "DELETE FROM employee WHERE id=101";
-        int deleteCount = statement.executeUpdate(deleteQuery);
-        System.out.println("(" + deleteCount + ") row deleted");
-
-        // step 5: close connection
-        connection.close();
     }
 }
